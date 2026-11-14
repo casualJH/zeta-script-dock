@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      1.0.2
+// @version      1.0.3
 // @description  제타 확장프로그램을 모으는 자동 감지 Dock.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -29,7 +29,7 @@
     return root;
   };
 
-  const VERSION = '1.0.2';
+  const VERSION = '1.0.3';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -528,7 +528,7 @@
     if (!panel) return;
     listDock.replaceChildren(); listFound.replaceChildren(); listIgnored.replaceChildren();
     const keys = Object.keys(config.entries);
-    const chosen = keys.filter(k => config.entries[k].mode === 'dock')
+    const chosen = keys.filter(k => config.entries[k].mode === 'dock' && nodes.get(k)?.el.isConnected)
       .sort((a,b) => config.entries[a].order - config.entries[b].order);
     renderDock(chosen);
     emptyDock.hidden = chosen.length > 0;
@@ -613,7 +613,13 @@
       if (!state.changed) return;
       const ordered = Array.from(listDock.querySelectorAll('[data-dock-key]')).map(el => el.dataset.dockKey);
       // 항목이 화면에서 일시적으로 사라져도 설정 항목 자체는 유지
-      ordered.forEach((key,i) => {if(config.entries[key]) config.entries[key].order = i+1;});
+      const visible = new Set(ordered);
+      const all = Object.keys(config.entries).filter(key => config.entries[key].mode === 'dock')
+        .sort((a, b) => config.entries[a].order - config.entries[b].order);
+      let next = 0;
+      all.forEach((key, index) => {
+        config.entries[visible.has(key) ? ordered[next++] : key].order = index + 1;
+      });
       saveConfig();
       render();
     }
@@ -933,7 +939,7 @@
         <label class="zsd-size-setting">열기 버튼 크기<input id="zsd-launch-size" type="range" min="28" max="96" step="1" value="40"><output id="zsd-size-value" for="zsd-launch-size">40 px</output></label>
         <label class="zsd-size-setting">아이콘만 보기<input id="zsd-icon-only" type="checkbox"></label>
         <label class="zsd-size-setting">펼친 상태 유지<input id="zsd-keep-open" type="checkbox"></label>
-        <div class="zsd-section"><div class="zsd-section-head"><strong>내 Dock</strong><span class="zsd-muted" id="zsd-mode-note">선택한 기능을 눌러 실행하세요</span></div><p class="zsd-execution-tip">눌러도 실행되지 않으면 ⚙ 설정에서 해당 항목의 실행 방식을 클릭 → 포인터로 바꿔 보세요.</p><div class="zsd-list" id="zsd-list-dock"></div><div class="zsd-empty" id="zsd-empty-dock">아직 추가된 버튼이 없어요. 편집에서 필요한 버튼을 추가해 주세요.</div></div>
+        <div class="zsd-section"><div class="zsd-section-head"><strong>내 Dock</strong><span class="zsd-muted" id="zsd-mode-note">선택한 기능을 눌러 실행하세요</span></div><p class="zsd-execution-tip">눌러도 실행되지 않으면 ⚙ 설정에서 해당 항목의 실행 방식을 클릭 → 포인터로 바꿔 보세요.</p><div class="zsd-list" id="zsd-list-dock"></div><div class="zsd-empty" id="zsd-empty-dock">현재 연결된 Dock 버튼이 없어요.</div></div>
         <div id="zsd-editor" hidden><div class="zsd-section"><div class="zsd-section-head"><strong>발견된 새 버튼</strong><span class="zsd-muted" id="zsd-found-count">0개</span></div><div class="zsd-list" id="zsd-list-found"></div><div class="zsd-empty" id="zsd-empty-found">현재 발견된 새 플로팅 버튼이 없어요.</div></div>
         <div class="zsd-toolbar"><button id="zsd-pick" class="zsd-tool" type="button">화면에서 직접 선택</button><button id="zsd-refresh" class="zsd-tool" type="button">다시 찾기</button></div>
         <div class="zsd-section"><div class="zsd-section-head"><strong>제외한 버튼</strong><span class="zsd-muted" id="zsd-ignored-count">0개</span></div><div class="zsd-list" id="zsd-list-ignored"></div><div class="zsd-empty" id="zsd-empty-ignored">제외한 버튼이 없어요.</div></div>
