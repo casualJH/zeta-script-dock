@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      0.3.1
+// @version      0.4.0
 // @description  제타의 플로팅 버튼을 선택적으로 모으는 자동 감지 Dock. 사용자가 고른 버튼만 모으며 Shadow DOM 아이콘 버튼 탐색을 지원합니다.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -20,7 +20,7 @@
   if (window.__zetaScriptDock010) return;
   window.__zetaScriptDock010 = true;
 
-  const VERSION = '0.3.1';
+  const VERSION = '0.4.0';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -48,7 +48,7 @@
   const activeElements = new WeakSet();
   const parkedStyles = new WeakMap();
   let config = loadConfig();
-  let host, shadow, launch, panel, dock, dockItems, sizeSelect, listDock, listFound, listIgnored, titleCounter, emptyDock, pickNotice;
+  let host, shadow, launch, panel, dock, dockItems, sizeSelect, iconOnlyInput, listDock, listFound, listIgnored, titleCounter, emptyDock, pickNotice;
   let opened = false, editing = false, picking = false, pickedClick = null, pickedUntil = 0;
   let pickHighlighted = null, scanning = false, scanTimer = 0, renderTimer = 0;
   let observer = null, position = null;
@@ -69,7 +69,7 @@
         };
       }
     }
-    return {entries, launchSize: Number.isInteger(saved?.launchSize) && saved.launchSize >= 28 && saved.launchSize <= 96 ? saved.launchSize : 40, position: saved && saved.position && Number.isFinite(saved.position.x) && Number.isFinite(saved.position.y)
+    return {entries, iconOnly: saved?.iconOnly === true, launchSize: Number.isInteger(saved?.launchSize) && saved.launchSize >= 28 && saved.launchSize <= 96 ? saved.launchSize : 40, position: saved && saved.position && Number.isFinite(saved.position.x) && Number.isFinite(saved.position.y)
       ? {x: saved.position.x, y: saved.position.y} : null};
   }
 
@@ -680,6 +680,7 @@
   }
   function showPanel() {
     sizeSelect.value = String(config.launchSize);
+    iconOnlyInput.checked = config.iconOnly;
     updateSizeValue();
     opened = true;
     editing = true;
@@ -705,6 +706,17 @@
       const useAbove = above >= below;
       dock.style.maxHeight = Math.max(0, (useAbove ? above : below) - gap) + 'px';
       const center = position.x + size / 2;
+      dock.toggleAttribute('data-icon-only', config.iconOnly);
+      if (config.iconOnly) {
+        const width = 58;
+        const left = clip(center - width / 2, 0, window.innerWidth - width);
+        dock.removeAttribute('data-icons-right');
+        dock.style.width = width + 'px';
+        dock.style.left = left + 'px';
+        dock.style.setProperty('--zsd-icon-offset', (center - left - width / 2) + 'px');
+        dock.style.top = (useAbove ? position.y - gap - dock.offsetHeight : position.y + size + gap) + 'px';
+        return;
+      }
       const iconsRight = center > window.innerWidth / 2;
       const edgeRoom = iconsRight ? window.innerWidth - center : center;
       const inset = Math.min(29, edgeRoom - 6);
@@ -827,6 +839,10 @@
         #zsd-dock[data-icons-right] #zsd-dock-settings{flex-direction:row-reverse;padding:6px var(--zsd-icon-padding,9px) 6px 20px;text-align:right}
         #zsd-dock[data-icons-right] .zsd-native-badge{right:auto;left:1px}
         .zsd-icon-glyph{display:block;flex:0 0 26px;width:26px;text-align:center;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+        #zsd-dock[data-icon-only] .zsd-dock-label{display:none}
+        #zsd-dock[data-icon-only] #zsd-dock-items .zsd-dock-icon,
+        #zsd-dock[data-icon-only] #zsd-dock-settings{justify-content:center;padding:0}
+        #zsd-dock[data-icon-only] .zsd-icon-glyph{transform:translateX(var(--zsd-icon-offset,0px))}
         .zsd-dock-label{min-width:0;font-size:12px;line-height:1.3;overflow-wrap:anywhere}
         .zsd-size-setting input{min-width:0;flex:1;accent-color:#bd9bff}
         .zsd-size-setting output{min-width:42px;text-align:right;font-variant-numeric:tabular-nums}
@@ -867,6 +883,7 @@
       <section id="zsd-panel" role="dialog" aria-label="제타 스크립트 Dock" hidden>
         <div class="zsd-head"><div><div class="zsd-title">제타 스크립트 Dock</div><div class="zsd-muted" id="zsd-counter">0/0 연결</div></div><div class="zsd-head-actions"><button id="zsd-done" type="button" hidden>완료</button><button id="zsd-close" type="button" aria-label="Dock 닫기">×</button></div></div>
         <label class="zsd-size-setting">열기 버튼 크기<input id="zsd-launch-size" type="range" min="28" max="96" step="1" value="40"><output id="zsd-size-value" for="zsd-launch-size">40 px</output></label>
+        <label class="zsd-size-setting">아이콘만 보기<input id="zsd-icon-only" type="checkbox"></label>
         <div class="zsd-section"><div class="zsd-section-head"><strong>내 Dock</strong><span class="zsd-muted" id="zsd-mode-note">선택한 기능을 눌러 실행하세요</span></div><p class="zsd-execution-tip">눌러도 실행되지 않으면 ⚙ 설정에서 해당 항목의 실행 방식을 클릭 → 포인터로 바꿔 보세요.</p><div class="zsd-list" id="zsd-list-dock"></div><div class="zsd-empty" id="zsd-empty-dock">아직 추가된 버튼이 없어요. 편집에서 필요한 버튼을 추가해 주세요.</div></div>
         <div id="zsd-editor" hidden><div class="zsd-section"><div class="zsd-section-head"><strong>발견된 새 버튼</strong><span class="zsd-muted" id="zsd-found-count">0개</span></div><div class="zsd-list" id="zsd-list-found"></div><div class="zsd-empty" id="zsd-empty-found">현재 발견된 새 플로팅 버튼이 없어요.</div></div>
         <div class="zsd-toolbar"><button id="zsd-pick" class="zsd-tool" type="button">화면에서 직접 선택</button><button id="zsd-refresh" class="zsd-tool" type="button">다시 찾기</button></div>
@@ -883,11 +900,13 @@
     dock = shadow.getElementById('zsd-dock');
     dockItems = shadow.getElementById('zsd-dock-items');
     sizeSelect = shadow.getElementById('zsd-launch-size');
+    iconOnlyInput = shadow.getElementById('zsd-icon-only');
     sizeSelect.addEventListener('input', updateSizeValue);
     launch.style.setProperty('--zsd-launch-size', config.launchSize + 'px');
     shadow.getElementById('zsd-dock-settings').addEventListener('click', showPanel);
     shadow.getElementById('zsd-done').addEventListener('click', () => {
       config.launchSize = Number(sizeSelect.value);
+      config.iconOnly = iconOnlyInput.checked;
       launch.style.setProperty('--zsd-launch-size', config.launchSize + 'px');
       editing = false;
       setLaunchPos(position.x, position.y, true);
