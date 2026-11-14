@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      0.4.0
+// @version      0.9.0
 // @description  제타의 플로팅 버튼을 선택적으로 모으는 자동 감지 Dock. 사용자가 고른 버튼만 모으며 Shadow DOM 아이콘 버튼 탐색을 지원합니다.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -20,7 +20,7 @@
   if (window.__zetaScriptDock010) return;
   window.__zetaScriptDock010 = true;
 
-  const VERSION = '0.4.0';
+  const VERSION = '0.9.0';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -56,7 +56,7 @@
   function loadConfig() {
     let saved;
     try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (_) { saved = {}; }
-    const entries = {};
+    const entries = Object.create(null);
     if (saved && saved.entries && typeof saved.entries === 'object' && !Array.isArray(saved.entries)) {
       for (const [key, item] of Object.entries(saved.entries).slice(0, 400)) {
         if (!/^.{1,240}$/.test(key) || !item || !['dock', 'ignore'].includes(item.mode)) continue;
@@ -346,10 +346,15 @@
         if (config.entries[key]?.mode === 'dock' && !activeKeys.has(key) && !activeElements.has(record.el)) park(key, record.el);
         else if (record.el.classList.contains(HIDDEN_CLASS)) restore(key);
       }
-      const before = Array.from(nodes.values()).map(r => r.key + '=' + hintName(r.el)).sort().join('\n');
-      const after = Array.from(found.values()).map(r => r.key + '=' + hintName(r.el)).sort().join('\n');
-      nodes.clear(); for (const [key, value] of found) nodes.set(key, value);
-      if (before !== after) scheduleRender();
+      let changed = nodes.size !== found.size;
+      for (const [key, record] of found) {
+        record.label = hintName(record.el);
+        const previous = nodes.get(key);
+        if (previous?.el !== record.el || previous.label !== record.label) changed = true;
+      }
+      nodes.clear();
+      for (const [key, record] of found) nodes.set(key, record);
+      if (changed) scheduleRender();
       else updateCounter();
     } catch (err) { console.warn('[제타 스크립트 Dock] 버튼 탐색 오류', err); }
     finally { scanning = false; }
@@ -679,9 +684,11 @@
     shadow.getElementById('zsd-size-value').textContent = sizeSelect.value + ' px';
   }
   function showPanel() {
-    sizeSelect.value = String(config.launchSize);
-    iconOnlyInput.checked = config.iconOnly;
-    updateSizeValue();
+    if (!editing) {
+      sizeSelect.value = String(config.launchSize);
+      iconOnlyInput.checked = config.iconOnly;
+      updateSizeValue();
+    }
     opened = true;
     editing = true;
     updatePanel();
@@ -793,21 +800,22 @@
   }
   function pickMovement(e) {
     if (!picking) return;
-    markPick(choosePickTarget(e.target));
+    markPick(choosePickTarget(e.composedPath()[0]));
   }
   function preventPickEvent(e) {
-    if (now() < pickedUntil && pickedClick && (pickedClick === e.target || pickedClick.contains(e.target))) {
+    if (e.isTrusted && e.type === 'click' && now() < pickedUntil && pickedClick && e.composedPath().includes(pickedClick)) {
+      pickedClick = null;
       e.preventDefault(); e.stopImmediatePropagation(); return;
     }
     if (!picking || e.type !== 'pointerdown' && e.type !== 'click') return;
-    const target = choosePickTarget(e.target);
+    const target = choosePickTarget(e.composedPath()[0]);
     if (!target) return;
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
     const key = idSignature(target);
     if (!key) { toast('버튼을 구별할 수 없습니다. 다른 위치를 선택해 주세요.'); return; }
     nodes.set(key, {key, el: target});
     manualNodes.set(key, target);
-    pickedClick = target; pickedUntil = now() + 850;
+    if (e.type === 'pointerdown') { pickedClick = target; pickedUntil = now() + 850; }
     stopPicking(false);
     setMode(key, 'dock');
     showPanel();
@@ -914,7 +922,7 @@
       launch.focus();
     });
     attachListSorting();
-    shadow.getElementById('zsd-close').addEventListener('click', () => { opened = false; updatePanel(); });
+    shadow.getElementById('zsd-close').addEventListener('click', () => { opened = false; editing = false; updatePanel(); });
     shadow.getElementById('zsd-pick').addEventListener('click', beginPicking);
     shadow.getElementById('zsd-refresh').addEventListener('click', () => { scan(); render(); toast('현재 화면의 플로팅 버튼을 다시 확인했어요.'); });
     shadow.getElementById('zsd-cancel-pick').addEventListener('click', () => stopPicking(true));
@@ -926,9 +934,9 @@
     document.addEventListener('pointermove', pickMovement, true);
     document.addEventListener('pointerdown', preventPickEvent, true);
     document.addEventListener('click', preventPickEvent, true);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (picking) stopPicking(true); else if (opened) { opened = false; updatePanel(); } } });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (picking) stopPicking(true); else if (opened) { opened = false; editing = false; updatePanel(); } } });
     document.addEventListener('pointerdown', e => {
-      if (opened && host && !e.composedPath().includes(host)) { opened = false; updatePanel(); }
+      if (opened && host && !e.composedPath().includes(host)) { opened = false; editing = false; updatePanel(); }
     }, true);
     window.addEventListener('pagehide', restoreAll);
     window.addEventListener('pageshow', scheduleScan);
