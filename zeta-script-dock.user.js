@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      0.3.0
+// @version      0.3.1
 // @description  제타의 플로팅 버튼을 선택적으로 모으는 자동 감지 Dock. 사용자가 고른 버튼만 모으며 Shadow DOM 아이콘 버튼 탐색을 지원합니다.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -20,7 +20,7 @@
   if (window.__zetaScriptDock010) return;
   window.__zetaScriptDock010 = true;
 
-  const VERSION = '0.3.0';
+  const VERSION = '0.3.1';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -640,8 +640,9 @@
     dockItems.replaceChildren();
     for (const key of chosen) {
       const record = nodes.get(key);
+      if (!record?.el.isConnected) continue;
       const item = config.entries[key];
-      const label = record ? buttonName(record.el, key) : item.label || key.replace(/^id:/, '');
+      const label = buttonName(record.el, key);
       const native = item.execution === 'native';
       const name = native ? label + ' · 원본 직접 실행' : label;
       const button = makeButton(item.icon || defaultIcon(label, record),
@@ -656,7 +657,6 @@
       button.replaceChildren(icon, caption);
       button.dataset.dockKey = key;
       button.title = name;
-      button.disabled = !record?.el.isConnected;
       if (native) {
         const badge = document.createElement('span');
         badge.className = 'zsd-native-badge';
@@ -842,8 +842,7 @@
         .zsd-head-actions{display:flex;align-items:center;gap:7px}.zsd-head-actions button{border:0;background:#34333a;color:#fff;border-radius:10px;min-width:36px;height:34px;font-size:19px;cursor:pointer}.zsd-head-actions #zsd-done{font-size:12px;font-weight:700;padding:0 10px;background:#524568}
         .zsd-section{padding:14px 13px 12px}.zsd-section+.zsd-section{border-top:1px solid #303034}
         .zsd-section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px}.zsd-section-head strong{font-size:14px}
-        .zsd-execution-tip{margin:8px 2px 0;color:#a7a4ae;font-size:12px;line-height:1.5}
-        .zsd-list:empty + .zsd-execution-tip{display:none}
+        .zsd-execution-tip{margin:0 2px 8px;color:#a7a4ae;font-size:12px;line-height:1.5}
         .zsd-list{background:#141416;border-radius:13px;overflow:hidden}.zsd-item{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:10px 10px;min-height:58px}
         .zsd-item+.zsd-item{border-top:1px solid #2c2b30}.zsd-item-info{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
         .zsd-name{color:#f7f6fa;background:none;border:0;text-align:left;font-size:14px;font-weight:650;padding:4px 0;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
@@ -868,7 +867,7 @@
       <section id="zsd-panel" role="dialog" aria-label="제타 스크립트 Dock" hidden>
         <div class="zsd-head"><div><div class="zsd-title">제타 스크립트 Dock</div><div class="zsd-muted" id="zsd-counter">0/0 연결</div></div><div class="zsd-head-actions"><button id="zsd-done" type="button" hidden>완료</button><button id="zsd-close" type="button" aria-label="Dock 닫기">×</button></div></div>
         <label class="zsd-size-setting">열기 버튼 크기<input id="zsd-launch-size" type="range" min="28" max="96" step="1" value="40"><output id="zsd-size-value" for="zsd-launch-size">40 px</output></label>
-        <div class="zsd-section"><div class="zsd-section-head"><strong>내 Dock</strong><span class="zsd-muted" id="zsd-mode-note">선택한 기능을 눌러 실행하세요</span></div><div class="zsd-list" id="zsd-list-dock"></div><p class="zsd-execution-tip">눌러도 실행되지 않으면 ⚙ 설정에서 해당 항목의 실행 방식을 클릭 → 포인터로 바꿔 보세요.</p><div class="zsd-empty" id="zsd-empty-dock">아직 추가된 버튼이 없어요. 편집에서 필요한 버튼을 추가해 주세요.</div></div>
+        <div class="zsd-section"><div class="zsd-section-head"><strong>내 Dock</strong><span class="zsd-muted" id="zsd-mode-note">선택한 기능을 눌러 실행하세요</span></div><p class="zsd-execution-tip">눌러도 실행되지 않으면 ⚙ 설정에서 해당 항목의 실행 방식을 클릭 → 포인터로 바꿔 보세요.</p><div class="zsd-list" id="zsd-list-dock"></div><div class="zsd-empty" id="zsd-empty-dock">아직 추가된 버튼이 없어요. 편집에서 필요한 버튼을 추가해 주세요.</div></div>
         <div id="zsd-editor" hidden><div class="zsd-section"><div class="zsd-section-head"><strong>발견된 새 버튼</strong><span class="zsd-muted" id="zsd-found-count">0개</span></div><div class="zsd-list" id="zsd-list-found"></div><div class="zsd-empty" id="zsd-empty-found">현재 발견된 새 플로팅 버튼이 없어요.</div></div>
         <div class="zsd-toolbar"><button id="zsd-pick" class="zsd-tool" type="button">화면에서 직접 선택</button><button id="zsd-refresh" class="zsd-tool" type="button">다시 찾기</button></div>
         <div class="zsd-section"><div class="zsd-section-head"><strong>제외한 버튼</strong><span class="zsd-muted" id="zsd-ignored-count">0개</span></div><div class="zsd-list" id="zsd-list-ignored"></div><div class="zsd-empty" id="zsd-empty-ignored">제외한 버튼이 없어요.</div></div>
