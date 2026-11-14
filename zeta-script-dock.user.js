@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      1.0.1
+// @version      1.0.2
 // @description  제타 확장프로그램을 모으는 자동 감지 Dock.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -20,8 +20,7 @@
   if (window.__zetaScriptDock010) return;
   window.__zetaScriptDock010 = true;
 
-  // Capture closed roots created after Dock starts. Only the output editor
-  // launcher is inspected; other closed-root contents are never scanned.
+  // Track roots created after Dock starts without changing their mode.
   const closedRoots = new WeakMap();
   const attachShadow = Element.prototype.attachShadow;
   Element.prototype.attachShadow = function (options) {
@@ -29,9 +28,8 @@
     if (root.mode === 'closed') closedRoots.set(this, root);
     return root;
   };
-  const outputEditorLaunchers = new WeakSet();
 
-  const VERSION = '1.0.1';
+  const VERSION = '1.0.2';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -109,8 +107,8 @@
     }
     return null;
   }
-  // 열린 Shadow DOM도 탐색합니다. 닫힌(closed) shadowRoot는 외부 접근이 제한됩니다.
-  function roots(candidates) {
+  // 열린 루트와 Dock 시작 이후 확보한 닫힌 루트를 탐색합니다.
+  function roots() {
     const out = [document];
     for (let i = 0; i < out.length && i < 100; i++) {
       const root = out[i];
@@ -118,15 +116,8 @@
       for (let j = 0; j < all.length; j++) {
         const el = all[j];
         if (el.id === HOST_ID) continue;
-        if (el.shadowRoot && out.length < 100) out.push(el.shadowRoot);
-        const closedRoot = closedRoots.get(el);
-        if (!closedRoot || !el.hasAttribute('data-theme')) continue;
-        const launcher = closedRoot.getElementById('open');
-        if (launcher?.matches('button[aria-expanded]') && launcher.textContent.trim() === '출력 보정' &&
-            closedRoot.getElementById('panel')?.getAttribute('aria-label') === '제타 출력 보정') {
-          outputEditorLaunchers.add(launcher);
-          candidates.add(launcher);
-        }
+        const nested = el.shadowRoot || closedRoots.get(el);
+        if (nested && out.length < 100) out.push(nested);
       }
     }
     return out;
@@ -245,7 +236,6 @@
     const fixed = closestFloating(el);
     if (!fixed) return false;
     const fr = fixed.getBoundingClientRect();
-    if (outputEditorLaunchers.has(el)) return true;
     if (fr.width > w * .92 && fr.height > 80) return false;
     if (fr.width > 275 && fr.height > 225) return false; // 원본 설정 패널 내부의 버튼은 탐색하지 않음.
     // 여러 조작 버튼을 담고 있는 가로 도구막대는 단독 실행 버튼이 아닙니다.
@@ -261,7 +251,10 @@
     return true;
   }
   function idSignature(el) {
-    if (outputEditorLaunchers.has(el)) return 'id:zeta-output-editor-launch';
+    const root = el.getRootNode();
+    if (root.mode === 'closed' && el.id) {
+      return 'closed:' + hash(idSignature(root.host) + '|' + el.id);
+    }
     if (el.id && !/^(:|[\d\-]{8,}|radix-|headlessui-|react-)/i.test(el.id)) return 'id:' + el.id.slice(0, 100);
     const labeled = hintName(el);
     const attrNames = ['data-testid', 'data-zeta-hub-id', 'aria-label', 'title'];
@@ -337,7 +330,7 @@
     try {
       const found = new Map();
       const candidates = new Set();
-      const scopes = roots(candidates);
+      const scopes = roots();
       const direct = queryAll(CLICKABLE_SELECTOR, scopes);
       for (let i = 0; i < Math.min(direct.length, 5000); i++) candidates.add(direct[i]);
       addFloatingCandidates(candidates, scopes);
@@ -822,17 +815,40 @@
     pickNotice.hidden = false;
     toast('추가할 플로팅 버튼을 화면에서 터치하세요.');
   }
+  function pickEventTarget(event) {
+    let target = event.composedPath()[0];
+    const seen = new Set();
+    while (target instanceof Element && !seen.has(target)) {
+      seen.add(target);
+      const root = closedRoots.get(target);
+      if (!root) break;
+      const hit = root.elementFromPoint?.(event.clientX, event.clientY);
+      if (hit && hit.getRootNode() === root) {
+        target = hit;
+        continue;
+      }
+      const matches = [...root.querySelectorAll(CLICKABLE_SELECTOR)].filter(el => {
+        if (!isLauncher(el, true)) return false;
+        const rect = el.getBoundingClientRect();
+        return event.clientX >= rect.left && event.clientX < rect.right &&
+          event.clientY >= rect.top && event.clientY < rect.bottom;
+      });
+      if (matches.length !== 1) break;
+      target = matches[0];
+    }
+    return target;
+  }
   function pickMovement(e) {
     if (!picking) return;
-    markPick(choosePickTarget(e.composedPath()[0]));
+    markPick(choosePickTarget(pickEventTarget(e)));
   }
   function preventPickEvent(e) {
-    if (e.isTrusted && e.type === 'click' && now() < pickedUntil && pickedClick && e.composedPath().includes(pickedClick)) {
+    if (e.isTrusted && e.type === 'click' && now() < pickedUntil && pickedClick && (e.composedPath().includes(pickedClick) || pickEventTarget(e) === pickedClick)) {
       pickedClick = null;
       e.preventDefault(); e.stopImmediatePropagation(); return;
     }
     if (!picking || e.type !== 'pointerdown' && e.type !== 'click') return;
-    const target = choosePickTarget(e.composedPath()[0]);
+    const target = choosePickTarget(pickEventTarget(e));
     if (!target) return;
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
     const key = idSignature(target);
