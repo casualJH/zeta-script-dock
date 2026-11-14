@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      1.0.0
+// @version      1.0.1
 // @description  제타 확장프로그램을 모으는 자동 감지 Dock.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -20,13 +20,25 @@
   if (window.__zetaScriptDock010) return;
   window.__zetaScriptDock010 = true;
 
-  const VERSION = '1.0.0';
+  // Capture closed roots created after Dock starts. Only the output editor
+  // launcher is inspected; other closed-root contents are never scanned.
+  const closedRoots = new WeakMap();
+  const attachShadow = Element.prototype.attachShadow;
+  Element.prototype.attachShadow = function (options) {
+    const root = Reflect.apply(attachShadow, this, arguments);
+    if (root.mode === 'closed') closedRoots.set(this, root);
+    return root;
+  };
+  const outputEditorLaunchers = new WeakSet();
+
+  const VERSION = '1.0.1';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
   const KNOWN_LAUNCHERS = {
     'zcp-launch': '프로필',
-    'zce-launch': '대화 저장'
+    'zce-launch': '대화 저장',
+    'zeta-output-editor-launch': '출력 보정'
   };
   const SKIP_ANCESTORS = 'dialog,[role="dialog"],[aria-modal="true"],nav,[role="navigation"],header,[role="banner"],footer,[role="contentinfo"],[role="menu"],[role="listbox"],form';
   const CLICKABLE_SELECTOR = 'button,[role="button"],input[type="button"],input[type="submit"],a[href],[onclick],[tabindex],[style*="cursor"],[class*="cursor-pointer"]';
@@ -98,7 +110,7 @@
     return null;
   }
   // 열린 Shadow DOM도 탐색합니다. 닫힌(closed) shadowRoot는 외부 접근이 제한됩니다.
-  function roots() {
+  function roots(candidates) {
     const out = [document];
     for (let i = 0; i < out.length && i < 100; i++) {
       const root = out[i];
@@ -107,6 +119,14 @@
         const el = all[j];
         if (el.id === HOST_ID) continue;
         if (el.shadowRoot && out.length < 100) out.push(el.shadowRoot);
+        const closedRoot = closedRoots.get(el);
+        if (!closedRoot || !el.hasAttribute('data-theme')) continue;
+        const launcher = closedRoot.getElementById('open');
+        if (launcher?.matches('button[aria-expanded]') && launcher.textContent.trim() === '출력 보정' &&
+            closedRoot.getElementById('panel')?.getAttribute('aria-label') === '제타 출력 보정') {
+          outputEditorLaunchers.add(launcher);
+          candidates.add(launcher);
+        }
       }
     }
     return out;
@@ -225,6 +245,7 @@
     const fixed = closestFloating(el);
     if (!fixed) return false;
     const fr = fixed.getBoundingClientRect();
+    if (outputEditorLaunchers.has(el)) return true;
     if (fr.width > w * .92 && fr.height > 80) return false;
     if (fr.width > 275 && fr.height > 225) return false; // 원본 설정 패널 내부의 버튼은 탐색하지 않음.
     // 여러 조작 버튼을 담고 있는 가로 도구막대는 단독 실행 버튼이 아닙니다.
@@ -240,6 +261,7 @@
     return true;
   }
   function idSignature(el) {
+    if (outputEditorLaunchers.has(el)) return 'id:zeta-output-editor-launch';
     if (el.id && !/^(:|[\d\-]{8,}|radix-|headlessui-|react-)/i.test(el.id)) return 'id:' + el.id.slice(0, 100);
     const labeled = hintName(el);
     const attrNames = ['data-testid', 'data-zeta-hub-id', 'aria-label', 'title'];
@@ -315,7 +337,7 @@
     try {
       const found = new Map();
       const candidates = new Set();
-      const scopes = roots();
+      const scopes = roots(candidates);
       const direct = queryAll(CLICKABLE_SELECTOR, scopes);
       for (let i = 0; i < Math.min(direct.length, 5000); i++) candidates.add(direct[i]);
       addFloatingCandidates(candidates, scopes);
