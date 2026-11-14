@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      0.9.1
+// @version      0.9.2
 // @description  제타의 플로팅 버튼을 선택적으로 모으는 자동 감지 Dock. 사용자가 고른 버튼만 모으며 Shadow DOM 아이콘 버튼 탐색을 지원합니다.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -20,7 +20,7 @@
   if (window.__zetaScriptDock010) return;
   window.__zetaScriptDock010 = true;
 
-  const VERSION = '0.9.1';
+  const VERSION = '0.9.2';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -749,6 +749,7 @@
     let state = null;
     launch.addEventListener('pointerdown', e => {
       if (e.button !== 0 && e.pointerType !== 'touch') return;
+      delete launch.dataset.justDragged;
       state = {id: e.pointerId, sx: e.clientX, sy: e.clientY, x: position.x, y: position.y, moved: false};
       try { launch.setPointerCapture(e.pointerId); } catch (_) {}
     });
