@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      0.9.0
+// @version      0.9.1
 // @description  제타의 플로팅 버튼을 선택적으로 모으는 자동 감지 Dock. 사용자가 고른 버튼만 모으며 Shadow DOM 아이콘 버튼 탐색을 지원합니다.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -20,7 +20,7 @@
   if (window.__zetaScriptDock010) return;
   window.__zetaScriptDock010 = true;
 
-  const VERSION = '0.9.0';
+  const VERSION = '0.9.1';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -48,7 +48,7 @@
   const activeElements = new WeakSet();
   const parkedStyles = new WeakMap();
   let config = loadConfig();
-  let host, shadow, launch, panel, dock, dockItems, sizeSelect, iconOnlyInput, listDock, listFound, listIgnored, titleCounter, emptyDock, pickNotice;
+  let host, shadow, launch, panel, dock, dockItems, sizeSelect, iconOnlyInput, keepOpenInput, listDock, listFound, listIgnored, titleCounter, emptyDock, pickNotice;
   let opened = false, editing = false, picking = false, pickedClick = null, pickedUntil = 0;
   let pickHighlighted = null, scanning = false, scanTimer = 0, renderTimer = 0;
   let observer = null, position = null;
@@ -69,7 +69,7 @@
         };
       }
     }
-    return {entries, iconOnly: saved?.iconOnly === true, launchSize: Number.isInteger(saved?.launchSize) && saved.launchSize >= 28 && saved.launchSize <= 96 ? saved.launchSize : 40, position: saved && saved.position && Number.isFinite(saved.position.x) && Number.isFinite(saved.position.y)
+    return {entries, keepOpen: saved?.keepOpen === true, iconOnly: saved?.iconOnly === true, launchSize: Number.isInteger(saved?.launchSize) && saved.launchSize >= 28 && saved.launchSize <= 96 ? saved.launchSize : 40, position: saved && saved.position && Number.isFinite(saved.position.x) && Number.isFinite(saved.position.y)
       ? {x: saved.position.x, y: saved.position.y} : null};
   }
 
@@ -417,7 +417,7 @@
 
     try {
       restore(key);
-      opened = false;
+      opened = config.keepOpen;
       editing = false;
       updatePanel();
 
@@ -687,6 +687,7 @@
     if (!editing) {
       sizeSelect.value = String(config.launchSize);
       iconOnlyInput.checked = config.iconOnly;
+      keepOpenInput.checked = config.keepOpen;
       updateSizeValue();
     }
     opened = true;
@@ -835,7 +836,7 @@
       <style>
         :host{all:initial;color-scheme:dark;font-family:system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif}
         *{box-sizing:border-box}button{font-family:inherit}button:focus-visible{outline:2px solid #c7b8ff;outline-offset:2px}
-        #zsd-launch{position:fixed;left:0;top:0;width:var(--zsd-launch-size,40px);height:var(--zsd-launch-size,40px);display:grid;place-items:center;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;border:1px solid #ffffff40;border-radius:50%;background:#242424ad;-webkit-backdrop-filter:blur(20px) saturate(125%);backdrop-filter:blur(20px) saturate(125%);color:#fff;box-shadow:0 7px 26px #0007;pointer-events:auto;z-index:2147483646;padding:0}
+        #zsd-launch{position:fixed;left:0;top:0;width:var(--zsd-launch-size,40px);height:var(--zsd-launch-size,40px);display:grid;place-items:center;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;border:1px solid #ffffff40;border-radius:50%;background:rgba(34,34,34,.20);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);color:#fff;box-shadow:0 7px 26px #0007;pointer-events:auto;z-index:2147483646;padding:0}
         #zsd-launch:active{cursor:grabbing}#zsd-launch svg{width:47%;height:47%;pointer-events:none}
         #zsd-dot{position:absolute;right:1px;top:1px;width:9px;height:9px;background:#dfdfdf;border:1px solid #333333;border-radius:50%}
         #zsd-dock{position:fixed;display:flex;flex-direction:column;align-items:center;gap:5px;width:min(214px,calc(100vw - 16px));padding:6px;border:1px solid #ffffff36;border-radius:21px;background:rgba(34,34,34,.20);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);box-shadow:0 4px 14px #0003;pointer-events:auto;overflow:hidden}
@@ -892,6 +893,7 @@
         <div class="zsd-head"><div><div class="zsd-title">제타 스크립트 Dock</div><div class="zsd-muted" id="zsd-counter">0/0 연결</div></div><div class="zsd-head-actions"><button id="zsd-done" type="button" hidden>완료</button><button id="zsd-close" type="button" aria-label="Dock 닫기">×</button></div></div>
         <label class="zsd-size-setting">열기 버튼 크기<input id="zsd-launch-size" type="range" min="28" max="96" step="1" value="40"><output id="zsd-size-value" for="zsd-launch-size">40 px</output></label>
         <label class="zsd-size-setting">아이콘만 보기<input id="zsd-icon-only" type="checkbox"></label>
+        <label class="zsd-size-setting">펼친 상태 유지<input id="zsd-keep-open" type="checkbox"></label>
         <div class="zsd-section"><div class="zsd-section-head"><strong>내 Dock</strong><span class="zsd-muted" id="zsd-mode-note">선택한 기능을 눌러 실행하세요</span></div><p class="zsd-execution-tip">눌러도 실행되지 않으면 ⚙ 설정에서 해당 항목의 실행 방식을 클릭 → 포인터로 바꿔 보세요.</p><div class="zsd-list" id="zsd-list-dock"></div><div class="zsd-empty" id="zsd-empty-dock">아직 추가된 버튼이 없어요. 편집에서 필요한 버튼을 추가해 주세요.</div></div>
         <div id="zsd-editor" hidden><div class="zsd-section"><div class="zsd-section-head"><strong>발견된 새 버튼</strong><span class="zsd-muted" id="zsd-found-count">0개</span></div><div class="zsd-list" id="zsd-list-found"></div><div class="zsd-empty" id="zsd-empty-found">현재 발견된 새 플로팅 버튼이 없어요.</div></div>
         <div class="zsd-toolbar"><button id="zsd-pick" class="zsd-tool" type="button">화면에서 직접 선택</button><button id="zsd-refresh" class="zsd-tool" type="button">다시 찾기</button></div>
@@ -909,12 +911,14 @@
     dockItems = shadow.getElementById('zsd-dock-items');
     sizeSelect = shadow.getElementById('zsd-launch-size');
     iconOnlyInput = shadow.getElementById('zsd-icon-only');
+    keepOpenInput = shadow.getElementById('zsd-keep-open');
     sizeSelect.addEventListener('input', updateSizeValue);
     launch.style.setProperty('--zsd-launch-size', config.launchSize + 'px');
     shadow.getElementById('zsd-dock-settings').addEventListener('click', showPanel);
     shadow.getElementById('zsd-done').addEventListener('click', () => {
       config.launchSize = Number(sizeSelect.value);
       config.iconOnly = iconOnlyInput.checked;
+      config.keepOpen = keepOpenInput.checked;
       launch.style.setProperty('--zsd-launch-size', config.launchSize + 'px');
       editing = false;
       setLaunchPos(position.x, position.y, true);
@@ -922,7 +926,7 @@
       launch.focus();
     });
     attachListSorting();
-    shadow.getElementById('zsd-close').addEventListener('click', () => { opened = false; editing = false; updatePanel(); });
+    shadow.getElementById('zsd-close').addEventListener('click', () => { opened = config.keepOpen; editing = false; updatePanel(); });
     shadow.getElementById('zsd-pick').addEventListener('click', beginPicking);
     shadow.getElementById('zsd-refresh').addEventListener('click', () => { scan(); render(); toast('현재 화면의 플로팅 버튼을 다시 확인했어요.'); });
     shadow.getElementById('zsd-cancel-pick').addEventListener('click', () => stopPicking(true));
@@ -936,7 +940,7 @@
     document.addEventListener('click', preventPickEvent, true);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (picking) stopPicking(true); else if (opened) { opened = false; editing = false; updatePanel(); } } });
     document.addEventListener('pointerdown', e => {
-      if (opened && host && !e.composedPath().includes(host)) { opened = false; editing = false; updatePanel(); }
+      if (opened && (editing || !config.keepOpen) && !e.composedPath().includes(host)) { opened = config.keepOpen; editing = false; updatePanel(); }
     }, true);
     window.addEventListener('pagehide', restoreAll);
     window.addEventListener('pageshow', scheduleScan);
@@ -945,7 +949,10 @@
     });
     observer.observe(document.body, {subtree:true, childList:true, attributes:true, attributeFilter:['style','class','hidden','aria-label','title','src']});
     setInterval(scheduleScan, 2500);
-    scan(); render();
+    scan();
+    opened = config.keepOpen;
+    if (opened) updatePanel();
+    else render();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
   else mount();
