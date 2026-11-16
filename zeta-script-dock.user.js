@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      1.0.3
+// @version      1.0.4
 // @description  제타 확장프로그램을 모으는 자동 감지 Dock.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -29,7 +29,7 @@
     return root;
   };
 
-  const VERSION = '1.0.3';
+  const VERSION = '1.0.4';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -671,7 +671,8 @@
       const label = buttonName(record.el, key);
       const native = item.execution === 'native';
       const name = native ? label + ' · 원본 직접 실행' : label;
-      const button = makeButton(item.icon || defaultIcon(label, record),
+      const scriptIcon = normalizeIcon(record.el.getAttribute('data-jh-dock-icon') || '');
+      const button = makeButton(item.icon || scriptIcon || defaultIcon(label, record),
         'zsd-dock-icon', () => trigger(key), name);
       const icon = document.createElement('span');
       icon.className = 'zsd-icon-glyph';
