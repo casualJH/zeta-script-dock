@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      1.0.4
+// @version      1.0.5
 // @description  제타 확장프로그램을 모으는 자동 감지 Dock.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -29,7 +29,7 @@
     return root;
   };
 
-  const VERSION = '1.0.4';
+  const VERSION = '1.0.5';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
@@ -558,11 +558,10 @@
     }
     shadow.getElementById('zsd-found-count').textContent = `${waiting.length}개`;
     shadow.getElementById('zsd-empty-found').hidden = waiting.length > 0;
-    const ignored = keys.filter(k => config.entries[k].mode === 'ignore');
+    const ignored = keys.filter(key => config.entries[key].mode === 'ignore' && nodes.get(key)?.el.isConnected);
     for (const key of ignored) {
-      const item = config.entries[key];
-      const label = nodes.has(key) ? buttonName(nodes.get(key).el, key) : (item.label || (key.startsWith('id:') ? key.slice(3) : '제외된 버튼'));
-      listIgnored.append(makeRow(label, nodes.has(key) ? '원본 위치에서 사용 중' : '현재 페이지에 없음', [
+      const label = buttonName(nodes.get(key).el, key);
+      listIgnored.append(makeRow(label, '원본 위치에서 사용 중', [
         {text: '해제', fn: () => setMode(key, null)}
       ]));
     }
