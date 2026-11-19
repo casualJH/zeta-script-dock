@@ -811,14 +811,14 @@
   function choosePickTarget(target) {
     if (!(target instanceof Element) || isOwn(target)) return null;
     const found = resolveIconTarget(target);
-    if (found) return found;
+    if (found) return canonicalLauncher(found);
     // closed Shadow DOM은 내부를 볼 수 없으므로 바깥의 호스트 버튼을 직접 선택 가능하게 합니다.
     for (let p = target, i = 0; p && i < 9; i++, p = p.parentElement || nearestHostRoot(p)) {
       if (!(p instanceof HTMLElement) || isOwn(p)) continue;
       const r = p.getBoundingClientRect();
       const st = getComputedStyle(p);
       if (r.width < 20 || r.height < 20 || r.width > 180 || r.height > 160) continue;
-      if (st.position === 'fixed' || st.cursor === 'pointer' || p.matches('button,[role=button],[onclick]')) return p;
+      if (st.position === 'fixed' || st.cursor === 'pointer' || p.matches('button,[role=button],[onclick]')) return canonicalLauncher(p);
     }
     return null;
   }
