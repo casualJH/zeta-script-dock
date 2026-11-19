@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      1.0.5-beta.2
+// @version      1.0.6-beta.1
 // @description  제타 확장프로그램을 모으는 자동 감지 Dock.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -29,7 +29,7 @@
     return root;
   };
 
-  const VERSION = '1.0.5-beta.1';
+  const VERSION = '1.0.6-beta.1';
   const STORAGE_KEY = 'zeta-script-dock-v1';
   const HOST_ID = 'zsd-dock-host';
   const HIDDEN_CLASS = 'zsd-dock-parked';
