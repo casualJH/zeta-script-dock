@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         제타 스크립트 Dock
 // @namespace    zeta-script-dock
-// @version      1.0.5-beta.1
+// @version      1.0.5-beta.2
 // @description  제타 확장프로그램을 모으는 자동 감지 Dock.
 // @author       제타 스크립트 Dock
 // @match        https://zeta-ai.io/*
@@ -324,6 +324,20 @@
   }
   function restoreAll() { for (const key of Array.from(parked.keys())) restore(key); }
 
+  // 하나의 명시적 실행 버튼 안에 있는 숫자/아이콘/텍스트는 별도 런처가 아닙니다.
+  // 예: role="button"인 floating 위젯과 내부의 숫자 span.
+  // 반대로 fixed 도구막대에 독립적인 버튼이 여러 개 있으면 합치지 않습니다.
+  function canonicalLauncher(el) {
+    const floating = closestFloating(el);
+    if (!floating || floating === el || !(floating instanceof HTMLElement)) return el;
+    const explicit = floating.matches('button,[role="button"],a[href],[onclick],input[type="button"],input[type="submit"]');
+    if (!explicit || !isLauncher(floating, true)) return el;
+    const nestedControls = floating.querySelector('button,[role="button"],a[href],[onclick],input[type="button"],input[type="submit"]');
+    // 별도의 조작 버튼이 존재하면 해당 컨테이너를 합치지 않습니다.
+    if (nestedControls) return el;
+    return floating;
+  }
+
   function scan() {
     if (scanning || !document.body) return;
     scanning = true;
@@ -335,7 +349,10 @@
       for (let i = 0; i < Math.min(direct.length, 5000); i++) candidates.add(direct[i]);
       addFloatingCandidates(candidates, scopes);
       // 부모 wrapper와 자식 실행 버튼이 모두 포착되면 더 구체적인 버튼을 우선.
-      const resolved = Array.from(candidates).filter(el => isLauncher(el) && isClickableShape(el));
+      // 후보를 검증하기 전에 같은 원본 실행 버튼으로 정규화합니다.
+      // 부모가 명시적 실행 요소일 때만 자식 후보를 부모로 귀속합니다.
+      const resolved = Array.from(new Set(Array.from(candidates, canonicalLauncher)))
+        .filter(el => isLauncher(el) && isClickableShape(el));
       resolved.sort((a, b) => {
         if (a.contains(b)) return 1;
         if (b.contains(a)) return -1;
